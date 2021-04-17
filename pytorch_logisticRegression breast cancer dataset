@@ -1,0 +1,143 @@
+import torch
+import torch.nn as nn
+from sklearn import datasets
+import numpy as np
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+
+#import breast cancer dataset & prepare data
+
+bc=datasets.load_breast_cancer()
+X,y=bc.data,bc.target
+
+n_samples,n_features = X.shape
+
+print("n_samples",n_samples)#569
+print("n_features",n_features)#30
+
+
+#train_test_split
+X_train,X_test,y_train,y_test=train_test_split(X,y,test_size=0.2,random_state=1234)
+
+#perform standardisation
+sc=StandardScaler()
+X_train=sc.fit_transform(X_train)
+X_test=sc.fit_transform(X_test)
+
+print(type(X_train))#<class 'numpy.ndarray'>
+
+#transform it into torch tensors
+X_train=torch.from_numpy(X_train.astype(np.float32))
+X_test=torch.from_numpy(X_test.astype(np.float32))
+y_train=torch.from_numpy(y_train.astype(np.float32))
+y_test=torch.from_numpy(y_test.astype(np.float32))
+
+
+print(X_train.shape)#torch.Size([455, 30])
+print(y_train.shape)#torch.Size([455])
+y_train=y_train.view(y_train.shape[0],1)
+
+print(y_train.shape)#torch.Size([455, 1])
+y_test=y_test.view(y_test.shape[0],1)
+
+
+#build a model
+
+class LogisticRegression(nn.Module):
+   def __init__(self,n_input_features):
+      super(LogisticRegression,self).__init__()
+      self.linear=nn.Linear(n_input_features,1)
+
+   def forward(self,x):
+      y_predicted=torch.sigmoid(self.linear(x))#(y_predicted.grad_fn) <SigmoidBackward object at 0x7feb94d4cd90>
+      
+      return y_predicted  
+
+model= LogisticRegression(n_features)  
+
+ #loss and optimizer
+learning_rate=0.01
+criterion=nn.BCELoss() #defining loss
+optimizer=torch.optim.SGD(model.parameters(),lr=learning_rate)#defining how model.parameters will be updated after calculating gradient descent
+
+
+#training loop starts
+n_epochs=100
+
+for epoch in range(n_epochs):
+
+  #forward pass
+  y_predicted=model(X_train)#forward pass function is invoked
+
+  #loss
+  loss=criterion(y_predicted,y_train)
+
+  #backward pass
+  loss.backward()
+
+  #optimization of model.parameters
+  optimizer.step()
+
+  #zero gradeints
+  optimizer.zero_grad()
+
+#training completed 
+
+  if (epoch % 10 ==0 ):
+    print("epoch --> {} loss ->{:.4f}".format(epoch,loss))
+
+#evaluation part
+#exclude below from computaion graph
+
+with torch.no_grad():
+  y_predicted=model(X_test)
+  y_predicted_class=y_predicted.round()
+  acc=y_predicted_class.eq(y_test).sum()/ float(y_test.shape[0])
+  print("\naccuracy obtained  is {:.4f}".format(acc))
+  
+#************************************************************************************************************************
+  """OUTPUT is---->
+n_samples 569
+n_features 30
+<class 'numpy.ndarray'>
+torch.Size([455, 30])
+torch.Size([455])
+torch.Size([455, 1])
+epoch --> 0 loss ->0.7982
+epoch --> 10 loss ->0.6060
+epoch --> 20 loss ->0.4961
+epoch --> 30 loss ->0.4276
+epoch --> 40 loss ->0.3807
+epoch --> 50 loss ->0.3461
+epoch --> 60 loss ->0.3192
+epoch --> 70 loss ->0.2977
+epoch --> 80 loss ->0.2799
+epoch --> 90 loss ->0.2649
+
+accuracy obtained  is 0.8772""
+
+#******************************************************************************************************************************
+#to see all weights and bias set 
+for name, param in model.named_parameters():
+  print("name is:: ",name)
+  print("param value is:: ",param)
+  print("\n")
+
+
+"""OUTPUT is---->
+
+name is::  linear.weight
+param value is::  Parameter containing:
+tensor([[-0.0527,  0.0331, -0.1289, -0.1206, -0.1936, -0.0202, -0.0055, -0.1393,
+          0.0554,  0.0530, -0.1622,  0.0306, -0.0327, -0.0704,  0.0061, -0.0389,
+         -0.0365, -0.2077,  0.0052, -0.0437, -0.2577, -0.1652, -0.1878, -0.2077,
+         -0.1205, -0.2201, -0.2643, -0.0905,  0.0612, -0.1684]],
+       requires_grad=True)
+
+
+name is::  linear.bias
+param value is::  Parameter containing:
+tensor([0.2148], requires_grad=True)
+"""
+  
